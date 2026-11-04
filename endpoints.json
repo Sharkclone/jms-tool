@@ -1,1 +1,68 @@
-{"_comment":"API that cua JMS, trich xuat tu ma JS cua web JMS ngay 2026-11-04 (xem api-recon.md muc 6). Gateway: https://jmsgw.jtexpress.vn, tien to dich vu operatingplatform. Xac thuc bang header authToken (YL_TOKEN), khong phai cookie.","batch_dict":{"method":"GET","note":"Tu dien loai chuyen hoan cho trang batch: query current=1&size=999, tra ve danh sach {returnType, code}","url":"https://jmsgw.jtexpress.vn/operatingplatform/returnTypePbmPieRelation/returnExpress/selectType"},"batch_import":{"method":"POST","note":"Upload file Excel mau len JMS (trang batch, nut Nhap file) - CAN multipart/form-data, cau noi hien chi gui JSON nen cho nay lam sau khi co token that de test","url":"https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/exportData"},"batch_query":{"method":"POST","note":"Trang batch (MutilReturnBack2) - tra cuu toi da 200 ma/lan: payload {waybillNos: [...]}, tra ve mang dong {waybillNo, returnType, enteringFlag (1=duoc, 2=khong), remark, receiverName, receiverDetailedAddress}","url":"https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/queryList"},"batch_save":{"method":"POST","note":"Trang batch - luu sau khi loc: payload la MANG [{waybillNo, rebackTypeCode}], rebackTypeCode = ma loai chuyen hoan da chon","url":"https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/afterFilterSave"},"batch_template":{"method":"GET","note":"Tai file Excel mau cua trang batch (tra ve file, khong phai JSON) - cau noi hien tra ve dang text nen tinh nang tai mau lam sau","url":"https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/exportTemplate"},"return_save_1":{"method":"POST","note":"Luu dang ky Hoan lan 1 (reqAdd) - payload = data tim kiem + cac truong reback* (xem index.html)","url":"https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/add"},"return_save_2":{"method":"POST","note":"Luu dang ky Hoan lan 2 (registerSecondReback) - payload giong return_save_1, applyTypeCode=6","url":"https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/registerSecondReback"},"return_search":{"method":"GET","note":"Dang ky chuyen hoan - Tim kiem: query waybillNo + applyTypeCode (4=Tra lai/Hoan lan 1, 6=Hoan lan 2)","url":"https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/findByWaybillNo"},"signfor_query":{"method":"POST","note":"Tra ky nhan CSKH: payload {keywordList: [ma...], typeEnum: 'WAYBILL'}","url":"https://jmsgw.jtexpress.vn/operatingplatform/podTracking/inner/query/keywordList"},"track_csswork":{"method":"POST","note":"Tra hanh trinh - viec CSKH: payload {keyword: ma, trackingTypeEnum: loai}","url":"https://jmsgw.jtexpress.vn/operatingplatform/podTracking/queryCssWork"},"track_matter":{"method":"POST","note":"Tra hanh trinh - kien van de: payload {current: 1, size: 100, waybillId: ma}","url":"https://jmsgw.jtexpress.vn/operatingplatform/abnormalPieceScanList/pageList"},"track_query":{"method":"POST","note":"Tra hanh trinh - thong tin don: payload la MANG [{id: ma}]","url":"https://jmsgw.jtexpress.vn/operatingplatform/expressTracking/opsOrderList"}}
+{
+  "_comment": "API that cua JMS, trich xuat tu ma JS cua web JMS ngay 2026-11-04 (xem api-recon.md muc 6). Gateway: https://jmsgw.jtexpress.vn, tien to dich vu operatingplatform. Xac thuc bang header authToken (YL_TOKEN), khong phai cookie.",
+  "batch_dict": {
+    "method": "GET",
+    "note": "Tu dien loai chuyen hoan cho trang batch: query current=1&size=999, tra ve danh sach {returnType, code}",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/returnTypePbmPieRelation/returnExpress/selectType"
+  },
+  "batch_import": {
+    "method": "POST",
+    "note": "Upload file Excel mau len JMS (trang batch, nut Nhap file) - CAN multipart/form-data, cau noi hien chi gui JSON nen cho nay lam sau khi co token that de test",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/exportData"
+  },
+  "batch_query": {
+    "method": "POST",
+    "note": "Trang batch (MutilReturnBack2) - tra cuu toi da 200 ma/lan: payload {waybillNos: [...]}, tra ve mang dong {waybillNo, returnType, enteringFlag (1=duoc, 2=khong), remark, receiverName, receiverDetailedAddress}",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/queryList"
+  },
+  "batch_save": {
+    "method": "POST",
+    "note": "Trang batch - luu sau khi loc: payload la MANG [{waybillNo, rebackTypeCode}], rebackTypeCode = ma loai chuyen hoan da chon",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/afterFilterSave"
+  },
+  "batch_template": {
+    "method": "GET",
+    "note": "Tai file Excel mau cua trang batch (tra ve file, khong phai JSON) - cau noi hien tra ve dang text nen tinh nang tai mau lam sau",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/batchReturnRegistry/exportTemplate"
+  },
+  "return_save_1": {
+    "method": "POST",
+    "note": "Luu dang ky Hoan lan 1 (reqAdd) - payload = data tim kiem + cac truong reback* (xem index.html)",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/add"
+  },
+  "return_save_2": {
+    "method": "POST",
+    "note": "Luu dang ky Hoan lan 2 (registerSecondReback) - payload giong return_save_1, applyTypeCode=6",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/registerSecondReback"
+  },
+  "return_search": {
+    "method": "GET",
+    "note": "Dang ky chuyen hoan - Tim kiem: query waybillNo + applyTypeCode (4=Tra lai/Hoan lan 1, 6=Hoan lan 2)",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/rebackTransferExpress/findByWaybillNo"
+  },
+  "signfor_query": {
+    "method": "POST",
+    "note": "Tra ky nhan CSKH: payload {keywordList: [ma...], typeEnum: 'WAYBILL'}",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/podTracking/inner/query/keywordList"
+  },
+  "track_csswork": {
+    "method": "POST",
+    "note": "Tra hanh trinh - viec CSKH: payload {keyword: ma, trackingTypeEnum: loai}",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/podTracking/queryCssWork"
+  },
+  "track_matter": {
+    "method": "POST",
+    "note": "Tra hanh trinh - kien van de: payload {current: 1, size: 100, waybillId: ma}",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/abnormalPieceScanList/pageList"
+  },
+  "track_query": {
+    "method": "POST",
+    "note": "Tra hanh trinh - thong tin don: payload la MANG [{id: ma}]",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/expressTracking/opsOrderList"
+  },
+  "track_detail": {
+    "method": "GET",
+    "note": "Tra hanh trinh - chi tiet don theo ma van don (?waybillNo=)",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/waybill/detailByNo"
+  }
+}

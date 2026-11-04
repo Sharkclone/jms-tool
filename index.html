@@ -308,7 +308,7 @@ $("returnExportBtn").onclick = () => {
   a.download = "ket-qua-chuyen-hoan.csv"; a.click();
 };
 
-// ---- Tra hanh trinh + tra ky nhan CSKH: hien ket qua tho tu JMS (JSON dep) ----
+// ---- Tra ky nhan CSKH: van hien ket qua tho (JSON dep) ----
 function prettyResp(resp) {
   if (!resp || resp.error) return "⚠️ " + (resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối");
   try { return JSON.stringify(JSON.parse(resp.data), null, 2); }
@@ -323,6 +323,105 @@ function addResultBlock(containerId, title, text) {
   div.appendChild(pre);
   $(containerId).appendChild(div);
 }
+
+// ---- Tra hanh trinh: the tom tat tung don (khong dump JSON tho) ----
+function jmsData(resp) {
+  if (!resp || resp.error) return { err: resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối" };
+  try { return { jms: JSON.parse(resp.data) }; }
+  catch (e) { return { err: "JMS trả về không phải JSON" }; }
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function pickFields(obj, keys) {
+  const out = [];
+  keys.forEach(([k, label]) => {
+    const v = obj ? obj[k] : undefined;
+    if (v !== null && v !== undefined && v !== "") out.push([label, v]);
+  });
+  return out;
+}
+function renderTrackOrder(code, detail, order, matter) {
+  const card = document.createElement("div");
+  card.className = "card";
+  let h = "<h3>" + esc(code) + "</h3>";
+  // -- Chi tiet don (detailByNo) --
+  const d = detail && detail.jms && detail.jms.code === 1 ? detail.jms.data : null;
+  const dObj = Array.isArray(d) ? d[0] : d;
+  if (detail && detail.err) h += '<p class="err">⚠️ Chi tiết đơn: ' + esc(detail.err) + '</p>';
+  else if (!dObj || typeof dObj !== "object") h += '<p class="small">Không có thông tin chi tiết đơn (detailByNo trả rỗng).</p>';
+  else {
+    const rows = pickFields(dObj, [
+      ["waybillNo", "Mã vận đơn"], ["status", "Trạng thái"], ["statusName", "Trạng thái"],
+      ["senderName", "Người gửi"], ["senderPhone", "SĐT gửi"], ["senderAddress", "Địa chỉ gửi"],
+      ["receiverName", "Người nhận"], ["receiverPhone", "SĐT nhận"], ["receiverAddress", "Địa chỉ nhận"],
+      ["weight", "Khối lượng"], ["chargeWeight", "Khối lượng tính cước"],
+      ["siteName", "Bưu cục"], ["createTime", "Ngày tạo"], ["signTime", "Ngày ký nhận"],
+      ["expressType", "Loại vận chuyển"], ["payType", "Hình thức thanh toán"]
+    ]);
+    if (!rows.length) {
+      Object.keys(dObj).forEach(k => {
+        const v = dObj[k];
+        if (v !== null && v !== undefined && v !== "" && typeof v !== "object") rows.push([k, v]);
+      });
+    }
+    if (rows.length) {
+      h += "<table><tbody>" + rows.map(r => "<tr><td style='width:160px'><b>" + esc(r[0]) + "</b></td><td>" + esc(r[1]) + "</td></tr>").join("") + "</tbody></table>";
+    } else {
+      h += '<p class="small">Chi tiết đơn trả về nhưng không có trường nào hiển thị được.</p>';
+    }
+    Object.keys(dObj).forEach(k => {
+      if (Array.isArray(dObj[k]) && dObj[k].length) {
+        h += "<p class='small'>Có thêm danh sách <b>" + esc(k) + "</b> (" + dObj[k].length + " dòng) — xem trong JSON thô bên dưới.</p>";
+      }
+    });
+  }
+  // -- Don hang opsOrderList (neu co) --
+  const o = order && order.jms && order.jms.code === 1 ? order.jms.data : null;
+  const oArr = Array.isArray(o) ? o : (o ? [o] : []);
+  if (order && order.err) h += '<p class="err">⚠️ Thông tin đơn hàng: ' + esc(order.err) + '</p>';
+  else if (oArr.length) {
+    h += "<h4 style='margin:12px 0 6px'>Đơn hàng liên quan</h4>";
+    oArr.forEach(it => {
+      const rows = pickFields(it, [["id", "ID"], ["waybillNo", "Mã vận đơn"], ["status", "Trạng thái"], ["statusName", "Trạng thái"], ["siteName", "Bưu cục"], ["createTime", "Ngày tạo"]]);
+      h += rows.length
+        ? "<p class='small'>" + rows.map(r => "<b>" + esc(r[0]) + ":</b> " + esc(r[1])).join(" · ") + "</p>"
+        : "<p class='small'>" + esc(JSON.stringify(it).slice(0, 300)) + "</p>";
+    });
+  }
+  // -- Kien van de: dong thoi gian gon (giu nguyen thu tu JMS tra ve) --
+  const m = matter && matter.jms && matter.jms.code === 1 ? matter.jms.data : null;
+  const recs = m ? (Array.isArray(m.records) ? m.records : (Array.isArray(m) ? m : [])) : [];
+  if (matter && matter.err) h += '<p class="err">⚠️ Kiện vấn đề: ' + esc(matter.err) + '</p>';
+  else if (!recs.length) h += "<p class='small'>Không có kiện vấn đề.</p>";
+  else {
+    h += "<h4 style='margin:12px 0 6px'>Kiện vấn đề (" + recs.length + ")</h4><table><thead><tr><th>Thời gian quét</th><th>Nguồn quét</th><th>Thiết bị</th><th>Ghi chú</th></tr></thead><tbody>";
+    recs.forEach(r => {
+      const note = r.problemDescription || r.remark || r.scanTypeName || "";
+      h += "<tr><td>" + esc(r.scanTime || r.dataCollectionTime || "") + "</td><td>" + esc(r.scanSourceName || "") + "</td><td>" + esc(r.scanPda || "") + "</td><td>" + esc(note) + "</td></tr>";
+    });
+    h += "</tbody></table>";
+  }
+  // -- JSON tho gap lai de doi chieu khi can --
+  const raw = [detail, order, matter].map(x => {
+    if (!x) return "";
+    if (x.err) return "Lỗi: " + x.err;
+    try { return JSON.stringify(x.jms, null, 2); } catch (e) { return ""; }
+  }).filter(Boolean).join("\n\n");
+  card.innerHTML = h;
+  if (raw) {
+    const det = document.createElement("details");
+    det.style.marginTop = "10px";
+    const sum = document.createElement("summary");
+    sum.textContent = "Xem JSON thô";
+    sum.className = "small";
+    const pre = document.createElement("pre");
+    pre.textContent = raw;
+    det.appendChild(sum); det.appendChild(pre);
+    card.appendChild(det);
+  }
+  $("trackResults").appendChild(card);
+}
 $("trackRunBtn").onclick = async () => {
   const codes = parseCodes($("trackCodes").value);
   if (!codes.length) { alert("Chưa nhập mã vận đơn."); return; }
@@ -330,12 +429,10 @@ $("trackRunBtn").onclick = async () => {
   $("trackResults").innerHTML = "";
   for (let i = 0; i < codes.length; i++) {
     $("trackProgress").textContent = "Đang tra " + (i + 1) + "/" + codes.length + ": " + codes[i];
-    // Thong tin don: payload la MANG [{id: ma}] nhu trang JMS gui
-    const r1 = await api("/api/call/track_query", [{ id: codes[i] }]);
-    addResultBlock("trackResults", codes[i] + " — thông tin đơn (opsOrderList)", prettyResp(r1));
-    // Kien van de cua don
-    const r2 = await api("/api/call/track_matter", { current: 1, size: 100, waybillId: codes[i] });
-    addResultBlock("trackResults", codes[i] + " — kiện vấn đề (abnormalPieceScanList)", prettyResp(r2));
+    const detail = jmsData(await api("/api/call/track_detail", { waybillNo: codes[i] }));
+    const order = jmsData(await api("/api/call/track_query", [{ id: codes[i] }]));
+    const matter = jmsData(await api("/api/call/track_matter", { current: 1, size: 100, waybillId: codes[i] }));
+    renderTrackOrder(codes[i], detail, order, matter);
   }
   $("trackProgress").textContent = "Xong.";
   $("trackRunBtn").disabled = false;
