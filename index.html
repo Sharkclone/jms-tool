@@ -81,6 +81,10 @@
     <span class="warn">⚠️ Đang mở tool qua mạng LAN (không phải trên máy chạy bridge) — chỉ dùng trên WiFi tin cậy, tắt bridge khi không dùng nữa.</span>
   </div>
 
+  <div class="card" id="updateNotice" style="display:none;border-color:#52c41a;background:#f6ffed">
+    <div class="row"><span id="updateNoticeText" style="flex:1"></span><button class="secondary" id="updateNoticeDismiss">Đã rõ</button></div>
+  </div>
+
 
   <div class="card" id="returnTab">
     <h3>Đăng ký chuyển hoàn — mỗi mã một dòng</h3>
@@ -171,7 +175,7 @@
       <button id="updateApplyBtn" class="secondary" disabled>Cập nhật lên bản mới</button>
       <span class="status" id="updateStatus"></span>
     </div>
-    <p class="small">Phiên bản hiện tại: <b id="updateCurrent">?</b>. Bản mới lấy từ repo GitHub của tool; trước khi ghi đè, tool sao lưu bản cũ vào thư mục <b>backups/</b> và không đụng tới session.json. Nếu server.py thay đổi thì khởi động lại bridge (chạy lại py server.py) để nhận bản mới; nếu extension thay đổi thì tải lại extension trong Chrome.</p>
+    <p class="small">Phiên bản hiện tại: <b id="updateCurrent">?</b>. Tool tự động cập nhật khi có bản mới — lúc khởi động bridge và lúc mở trang — không cần bấm gì. Bản cũ được sao lưu vào thư mục <b>backups/</b> trước khi ghi đè, không đụng tới session.json. Nếu server.py thay đổi thì khởi động lại bridge (chạy lại py server.py) để nhận bản mới; nếu extension thay đổi thì tải lại extension trong Chrome. Hai nút trên chỉ để kiểm tra/cập nhật thủ công khi cần.</p>
   </div>
 
   <p class="small">Tool chạy hoàn toàn trên máy này qua cầu nối Python (server.py). Dữ liệu gửi thẳng tới JMS bằng phiên đăng nhập của bạn.</p>
@@ -568,7 +572,7 @@ $("updateApplyBtn").onclick = async () => {
   if (!confirm("Cập nhật tool lên bản mới nhất? Bản cũ sẽ được sao lưu vào thư mục backups/ trước khi ghi đè.")) return;
   $("updateApplyBtn").disabled = true;
   $("updateStatus").textContent = "Đang tải bản mới...";
-  const r = await api("/api/update/apply");
+  const r = await api("/api/update/apply", {});
   if (!r.ok) { $("updateStatus").innerHTML = '<span class="err">⚠️ ' + (r.detail || r.error) + '</span>'; $("updateApplyBtn").disabled = false; return; }
   let msg = '✅ Đã cập nhật lên bản ' + r.new_version + '. File thay đổi: ' + (r.changed.length ? r.changed.join(", ") : "không có") + '. Bản cũ đã sao lưu.';
   if (r.restart_needed) msg += ' ⚠️ server.py đã đổi — khởi động lại bridge (chạy lại py server.py) để nhận bản mới.';
@@ -576,6 +580,34 @@ $("updateApplyBtn").onclick = async () => {
   $("updateStatus").innerHTML = msg;
   $("updateCurrent").textContent = r.new_version;
 };
+
+// ---- Tu dong cap nhat khi mo trang (neu co ban moi) ----
+$("updateNoticeDismiss").onclick = () => {
+  $("updateNotice").style.display = "none";
+  try { sessionStorage.removeItem("jms_update_notice"); } catch (e) {}
+};
+async function autoUpdateOnLoad() {
+  try {
+    const saved = sessionStorage.getItem("jms_update_notice");
+    if (saved) {
+      $("updateNoticeText").textContent = saved;
+      $("updateNotice").style.display = "";
+    }
+  } catch (e) {}
+  try {
+    const r = await api("/api/update/check");
+    if (!r.ok || !r.update_available) return;
+    $("updateStatus").textContent = "Có bản mới " + r.latest + " — đang tự động cập nhật...";
+    const a = await api("/api/update/apply", {});
+    if (!a.ok) { $("updateStatus").innerHTML = '<span class="err">⚠️ Tự động cập nhật thất bại: ' + (a.detail || a.error) + ' — bấm Kiểm tra để thử lại.</span>'; return; }
+    let msg = "✅ Đã tự động cập nhật lên bản " + a.new_version + ". Bản cũ đã sao lưu.";
+    if (a.restart_needed) msg += " ⚠️ server.py đã đổi — khởi động lại bridge (chạy lại py server.py) để nhận bản mới.";
+    if (a.extension_reload_needed) msg += " ⚠️ Extension đã đổi — tải lại extension trong Chrome.";
+    try { sessionStorage.setItem("jms_update_notice", msg); } catch (e) {}
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) { /* khong co mang / bridge loi: im lang, dung ban cu */ }
+}
+autoUpdateOnLoad();
 
 loadBatchDict();
 refreshStatus();

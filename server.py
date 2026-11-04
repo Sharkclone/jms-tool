@@ -181,6 +181,14 @@ def apply_update():
     except Exception as e:
         return 200, {"ok": False, "error": "download_failed",
                      "detail": "Tai ban moi that bai, ban cu van nguyen: %s" % e}
+    # 1b. File Python moi phai bien dich duoc, neu khong thi huy - tranh lam hong lan chay sau.
+    for rel, content in new_contents.items():
+        if rel.endswith(".py"):
+            try:
+                compile(content.decode("utf-8"), rel, "exec")
+            except Exception as e:
+                return 200, {"ok": False, "error": "invalid_python",
+                             "detail": "Ban moi co file Python loi, giu nguyen ban cu: %s (%s)" % (rel, e)}
     # 2. Sao luu ban cu vao backups/<thoi gian>/ (tru session.json).
     stamp = time.strftime("%Y%m%d-%H%M%S")
     backup_dir = os.path.join(BASE_DIR, "backups", stamp)
@@ -207,6 +215,25 @@ def apply_update():
                  "changed": changed, "backup_dir": backup_dir,
                  "restart_needed": "server.py" in changed,
                  "extension_reload_needed": any(r.startswith("extension/") for r in changed)}
+
+
+def startup_update():
+    """Tu dong cap nhat khi bridge khoi dong (neu co ban moi tren repo).
+    Bat ky loi nao (mat mang, tai hong) cung chi in canh bao roi chay tiep ban cu."""
+    try:
+        code, chk = check_update()
+        if not chk.get("ok") or not chk.get("update_available"):
+            return
+        print("Co ban moi %s (dang dung %s) - dang tu dong cap nhat..." % (chk["latest"], chk["current"]))
+        code, res = apply_update()
+        if res.get("ok"):
+            print("Da tu dong cap nhat len %s. Ban cu sao luu tai %s." % (res["new_version"], res["backup_dir"]))
+            if res.get("restart_needed"):
+                print("Luu y: server.py da doi - lan khoi dong sau se chay ban moi.")
+        else:
+            print("Tu dong cap nhat that bai (%s) - van chay ban cu." % (res.get("detail") or res.get("error")))
+    except Exception as e:
+        print("Khong kiem tra duoc ban moi (%s) - van chay ban cu." % e)
 
 
 def _lan_ips():
@@ -276,6 +303,12 @@ class Handler(BaseHTTPRequestHandler):
             code, obj = check_update()
             self._send_json(code, obj)
             return
+        if self.path == "/api/update/apply":
+            # Cap nhat lam thay doi du lieu nen chi nhan POST; GET lac vao day
+            # (trang cu goi khong kem body) thi tra loi ro rang thay vi 404 kho hieu.
+            self._send_json(405, {"error": "method_not_allowed",
+                                  "detail": "Cap nhat phai goi bang POST - tai lai trang de lay ban giao dien moi."})
+            return
         if self.path == "/api/endpoints":
             eps = load_endpoints()
             self._send_json(200, {k: {"configured": bool((v.get("url") or "").strip()), "note": v.get("note", "")}
@@ -327,6 +360,7 @@ def main():
                     help="Dia chi lang nghe (mac dinh 127.0.0.1; 0.0.0.0 de mo qua LAN cho mobile)")
     ap.add_argument("--port", type=int, default=PORT)
     args = ap.parse_args()
+    startup_update()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print("JMS Tool dang chay: http://%s:%d  (Ctrl+C de dung)" % (args.host, args.port))
     if args.host == "0.0.0.0":
