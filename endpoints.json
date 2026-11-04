@@ -64,5 +64,10 @@
     "method": "GET",
     "note": "Tra hanh trinh - chi tiet don theo ma van don (?waybillNo=)",
     "url": "https://jmsgw.jtexpress.vn/operatingplatform/waybill/detailByNo"
+  },
+  "track_pod": {
+    "method": "POST",
+    "note": "Tra hanh trinh - Lich su POD: payload {keywordList:[ma], trackingTypeEnum:WAYBILL} -> data[0].details",
+    "url": "https://jmsgw.jtexpress.vn/operatingplatform/podTracking/inner/query/keywordList"
   }
 }

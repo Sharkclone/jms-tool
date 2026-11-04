@@ -328,7 +328,7 @@ function addResultBlock(containerId, title, text) {
   $(containerId).appendChild(div);
 }
 
-// ---- Tra hanh trinh: the tom tat tung don (khong dump JSON tho) ----
+// ---- Tra hanh trinh: giong trang JMS (POD记录 + 问题件登记信息 + 运单详情) ----
 function jmsData(resp) {
   if (!resp || resp.error) return { err: resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối" };
   try { return { jms: JSON.parse(resp.data) }; }
@@ -345,23 +345,65 @@ function pickFields(obj, keys) {
   });
   return out;
 }
-function renderTrackOrder(code, detail, order, matter) {
+function isRedeliveryRow(r) {
+  const t = ((r.scanType || "") + " " + (r.trackingContent || "")).toLowerCase();
+  return t.indexOf("giao lại") >= 0 || t.indexOf("再次派送") >= 0 || t.indexOf("重派") >= 0 || t.indexOf("redeliver") >= 0;
+}
+function volWeight(r) {
+  const l = Number(r.length) || 0, w = Number(r.width) || 0, h = Number(r.high) || 0;
+  if (l && w && h) return (l * w * h / 6000).toFixed(2);
+  return r.tijizhong || "";
+}
+function tableFromRows(cols, rows) {
+  const shown = cols.filter(([k, , fn]) => rows.some(r => {
+    const v = fn ? fn(r) : r[k];
+    return v !== null && v !== undefined && v !== "";
+  }));
+  if (!shown.length) return "";
+  let h = "<table><thead><tr>" + shown.map(([, label]) => "<th>" + esc(label) + "</th>").join("") + "</tr></thead><tbody>";
+  rows.forEach(r => {
+    const red = r._red ? " style='background:#fdecea;font-weight:600'" : "";
+    h += "<tr" + red + ">" + shown.map(([k, , fn]) => "<td>" + esc(fn ? fn(r) : (r[k] == null ? "" : r[k])) + "</td>").join("") + "</tr>";
+  });
+  return h + "</tbody></table>";
+}
+function renderTrackOrder(code, detail, podResp, matter, order) {
   const card = document.createElement("div");
   card.className = "card";
   let h = "<h3>" + esc(code) + "</h3>";
-  // -- Chi tiet don (detailByNo) --
+  let podList = [];
+  if (podResp && podResp.jms && podResp.jms.code === 1) {
+    const d = podResp.jms.data;
+    if (Array.isArray(d) && d[0]) podList = d[0].details || d[0].detailList || [];
+    else if (d && Array.isArray(d.details)) podList = d.details;
+    else if (Array.isArray(d)) podList = d;
+  }
+  const redRows = podList.filter(isRedeliveryRow);
+  const m = matter && matter.jms && matter.jms.code === 1 ? matter.jms.data : null;
+  const recs = m ? (Array.isArray(m.records) ? m.records : (Array.isArray(m) ? m : [])) : [];
+  const lastProblem = recs.length ? recs[recs.length - 1] : null;
+  if (redRows.length) {
+    const rr = redRows[redRows.length - 1];
+    h += "<div style='background:#fdecea;border:1px solid #ff6464;border-radius:4px;padding:10px 12px;margin-bottom:12px'>📦 <b>Đơn có phát lại</b> — dòng Giao lại hàng được tô đỏ trong Lịch sử POD bên dưới."
+      + "<br>Thời gian: <b>" + esc(rr.scanTime || "") + "</b>"
+      + (rr.trackingContent ? " · " + esc(rr.trackingContent) : "")
+      + (lastProblem && lastProblem.operatorName ? "<br>Nhân viên xử lý kiện vấn đề gần nhất: <b>" + esc(lastProblem.operatorName) + "</b>" : "")
+      + "</div>";
+  }
   const d = detail && detail.jms && detail.jms.code === 1 ? detail.jms.data : null;
   const dObj = Array.isArray(d) ? d[0] : d;
+  h += "<h4 style='margin:12px 0 6px'>Thông tin đơn</h4>";
   if (detail && detail.err) h += '<p class="err">⚠️ Chi tiết đơn: ' + esc(detail.err) + '</p>';
   else if (!dObj || typeof dObj !== "object") h += '<p class="small">Không có thông tin chi tiết đơn (detailByNo trả rỗng).</p>';
   else {
     const rows = pickFields(dObj, [
-      ["waybillNo", "Mã vận đơn"], ["status", "Trạng thái"], ["statusName", "Trạng thái"],
+      ["waybillNo", "Mã vận đơn"], ["billCode", "Mã vận đơn"], ["shipper", "Nhân viên phát"],
+      ["realPickNetworkName", "Bưu cục gửi"], ["senderCityName", "TP gửi"], ["initDistributeName", "TT trung chuyển gửi"],
+      ["dispatchNetworkName", "Bưu cục nhận"], ["receiverCityName", "TP nhận"], ["destinationDistributeName", "TT trung chuyển nhận"],
       ["senderName", "Người gửi"], ["senderPhone", "SĐT gửi"], ["senderAddress", "Địa chỉ gửi"],
       ["receiverName", "Người nhận"], ["receiverPhone", "SĐT nhận"], ["receiverAddress", "Địa chỉ nhận"],
-      ["weight", "Khối lượng"], ["chargeWeight", "Khối lượng tính cước"],
-      ["siteName", "Bưu cục"], ["createTime", "Ngày tạo"], ["signTime", "Ngày ký nhận"],
-      ["expressType", "Loại vận chuyển"], ["payType", "Hình thức thanh toán"]
+      ["weight", "Khối lượng"], ["status", "Trạng thái"], ["statusName", "Trạng thái"],
+      ["createTime", "Ngày tạo"], ["signTime", "Ngày ký nhận"]
     ]);
     if (!rows.length) {
       Object.keys(dObj).forEach(k => {
@@ -369,23 +411,41 @@ function renderTrackOrder(code, detail, order, matter) {
         if (v !== null && v !== undefined && v !== "" && typeof v !== "object") rows.push([k, v]);
       });
     }
-    if (rows.length) {
-      h += "<table><tbody>" + rows.map(r => "<tr><td style='width:160px'><b>" + esc(r[0]) + "</b></td><td>" + esc(r[1]) + "</td></tr>").join("") + "</tbody></table>";
-    } else {
-      h += '<p class="small">Chi tiết đơn trả về nhưng không có trường nào hiển thị được.</p>';
-    }
+    if (rows.length) h += "<table><tbody>" + rows.map(r => "<tr><td style='width:170px'><b>" + esc(r[0]) + "</b></td><td>" + esc(r[1]) + "</td></tr>").join("") + "</tbody></table>";
+    else h += '<p class="small">Chi tiết đơn trả về nhưng không có trường nào hiển thị được.</p>';
     Object.keys(dObj).forEach(k => {
       if (Array.isArray(dObj[k]) && dObj[k].length) {
         h += "<p class='small'>Có thêm danh sách <b>" + esc(k) + "</b> (" + dObj[k].length + " dòng) — xem trong JSON thô bên dưới.</p>";
       }
     });
   }
-  // -- Don hang opsOrderList (neu co) --
+  h += "<h4 style='margin:14px 0 6px'>Lịch sử POD</h4>";
+  if (podResp && podResp.err) h += '<p class="err">⚠️ Lịch sử POD: ' + esc(podResp.err) + '</p>';
+  else if (!podList.length) h += "<p class='small'>Không có lịch sử POD.</p>";
+  else {
+    podList.forEach(r => { r._red = isRedeliveryRow(r); });
+    h += tableFromRows([
+      ["scanTime", "Thời gian quét"], ["uploadTime", "Thời gian tải lên"], ["scanType", "Loại quét"],
+      ["trackingContent", "Mô tả hành trình"], ["remark6", "Nguồn"], ["weight", "Khối lượng"],
+      ["tijizhong", "KL thể tích", volWeight]
+    ], podList);
+  }
+  h += "<h4 style='margin:14px 0 6px'>Kiện vấn đề</h4>";
+  if (matter && matter.err) h += '<p class="err">⚠️ Kiện vấn đề: ' + esc(matter.err) + '</p>';
+  else if (!recs.length) h += "<p class='small'>Không có kiện vấn đề.</p>";
+  else {
+    h += tableFromRows([
+      ["waybillId", "Mã vận đơn"], ["abnormalPieceCode", "Mã loại"], ["abnormalPieceName", "Loại kiện vấn đề"],
+      ["remark", "Mô tả"], ["operatorCode", "Mã NV quét"], ["operatorName", "Tên NV quét"],
+      ["scanNetworkName", "Bưu cục quét"], ["scanTime", "Thời gian quét"], ["bagcode", "Mã túi"],
+      ["codMoney", "COD"], ["scanSourceName", "Nguồn quét"], ["scanPda", "Thiết bị"], ["problemDescription", "Mô tả vấn đề"]
+    ], recs);
+  }
   const o = order && order.jms && order.jms.code === 1 ? order.jms.data : null;
   const oArr = Array.isArray(o) ? o : (o ? [o] : []);
   if (order && order.err) h += '<p class="err">⚠️ Thông tin đơn hàng: ' + esc(order.err) + '</p>';
   else if (oArr.length) {
-    h += "<h4 style='margin:12px 0 6px'>Đơn hàng liên quan</h4>";
+    h += "<h4 style='margin:14px 0 6px'>Đơn hàng liên quan</h4>";
     oArr.forEach(it => {
       const rows = pickFields(it, [["id", "ID"], ["waybillNo", "Mã vận đơn"], ["status", "Trạng thái"], ["statusName", "Trạng thái"], ["siteName", "Bưu cục"], ["createTime", "Ngày tạo"]]);
       h += rows.length
@@ -393,24 +453,10 @@ function renderTrackOrder(code, detail, order, matter) {
         : "<p class='small'>" + esc(JSON.stringify(it).slice(0, 300)) + "</p>";
     });
   }
-  // -- Kien van de: dong thoi gian gon (giu nguyen thu tu JMS tra ve) --
-  const m = matter && matter.jms && matter.jms.code === 1 ? matter.jms.data : null;
-  const recs = m ? (Array.isArray(m.records) ? m.records : (Array.isArray(m) ? m : [])) : [];
-  if (matter && matter.err) h += '<p class="err">⚠️ Kiện vấn đề: ' + esc(matter.err) + '</p>';
-  else if (!recs.length) h += "<p class='small'>Không có kiện vấn đề.</p>";
-  else {
-    h += "<h4 style='margin:12px 0 6px'>Kiện vấn đề (" + recs.length + ")</h4><table><thead><tr><th>Thời gian quét</th><th>Nguồn quét</th><th>Thiết bị</th><th>Ghi chú</th></tr></thead><tbody>";
-    recs.forEach(r => {
-      const note = r.problemDescription || r.remark || r.scanTypeName || "";
-      h += "<tr><td>" + esc(r.scanTime || r.dataCollectionTime || "") + "</td><td>" + esc(r.scanSourceName || "") + "</td><td>" + esc(r.scanPda || "") + "</td><td>" + esc(note) + "</td></tr>";
-    });
-    h += "</tbody></table>";
-  }
-  // -- JSON tho gap lai de doi chieu khi can --
-  const raw = [detail, order, matter].map(x => {
+  const raw = [["Lịch sử POD", podResp], ["Kiện vấn đề", matter], ["Chi tiết đơn", detail], ["Đơn hàng", order]].map(([label, x]) => {
     if (!x) return "";
-    if (x.err) return "Lỗi: " + x.err;
-    try { return JSON.stringify(x.jms, null, 2); } catch (e) { return ""; }
+    if (x.err) return label + " — Lỗi: " + x.err;
+    try { return label + ":\n" + JSON.stringify(x.jms, null, 2); } catch (e) { return ""; }
   }).filter(Boolean).join("\n\n");
   card.innerHTML = h;
   if (raw) {
@@ -434,13 +480,15 @@ $("trackRunBtn").onclick = async () => {
   for (let i = 0; i < codes.length; i++) {
     $("trackProgress").textContent = "Đang tra " + (i + 1) + "/" + codes.length + ": " + codes[i];
     const detail = jmsData(await api("/api/call/track_detail", { waybillNo: codes[i] }));
-    const order = jmsData(await api("/api/call/track_query", [{ id: codes[i] }]));
+    const podResp = jmsData(await api("/api/call/track_pod", { keywordList: [codes[i]], trackingTypeEnum: "WAYBILL" }));
     const matter = jmsData(await api("/api/call/track_matter", { current: 1, size: 100, waybillId: codes[i] }));
-    renderTrackOrder(codes[i], detail, order, matter);
+    const order = jmsData(await api("/api/call/track_query", [{ id: codes[i] }]));
+    renderTrackOrder(codes[i], detail, podResp, matter, order);
   }
   $("trackProgress").textContent = "Xong.";
   $("trackRunBtn").disabled = false;
 };
+
 $("signforRunBtn").onclick = async () => {
   const codes = parseCodes($("signforCodes").value);
   if (!codes.length) { alert("Chưa nhập mã vận đơn."); return; }
