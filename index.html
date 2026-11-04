@@ -330,9 +330,15 @@ function addResultBlock(containerId, title, text) {
 
 // ---- Tra hanh trinh: giong trang JMS (POD记录 + 问题件登记信息 + 运单详情) ----
 function jmsData(resp) {
-  if (!resp || resp.error) return { err: resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối" };
+  if (!resp) return { err: "Không có phản hồi từ cầu nối" };
+  if (resp.ok === false) {
+    const preview = resp.data ? String(resp.data).slice(0, 200) : "";
+    return { err: "JMS trả lỗi HTTP " + (resp.upstream_status || "?") + (preview ? ": " + preview : "") };
+  }
+  if (resp.error) return { err: resp.detail || resp.error };
+  if (!resp.data) return { err: "JMS trả về rỗng" };
   try { return { jms: JSON.parse(resp.data) }; }
-  catch (e) { return { err: "JMS trả về không phải JSON" }; }
+  catch (e) { return { err: "JMS trả về không phải JSON: " + String(resp.data).slice(0, 200) }; }
 }
 function esc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -346,8 +352,23 @@ function pickFields(obj, keys) {
   return out;
 }
 function isRedeliveryRow(r) {
-  const t = ((r.scanType || "") + " " + (r.trackingContent || "")).toLowerCase();
+  const t = ((r.scanTypeName || "") + " " + (r.scanType || "") + " " + (r.trackTemplate || "") + " " + (r.trackingContent || "")).toLowerCase();
   return t.indexOf("giao lại") >= 0 || t.indexOf("再次派送") >= 0 || t.indexOf("重派") >= 0 || t.indexOf("redeliver") >= 0;
+}
+function renderTrackTemplate(r) {
+  // JMS hien thi cot Mo ta tu trackTemplate (chuoi mau $[truong] / $[a||b]),
+  // khong phai tu trackingContent. Thay placeholder bang gia tri that cua dong.
+  let t = r.trackTemplate || r.trackingContent || "";
+  if (!t) return "";
+  if (r.partnerCode) return t;
+  return t.replace(/\$\[([^\]]+)\]/g, (m, inner) => {
+    const parts = inner.split("||");
+    for (const p of parts) {
+      const v = r[p.trim()];
+      if (v !== null && v !== undefined && v !== "") return String(v);
+    }
+    return "";
+  });
 }
 function volWeight(r) {
   const l = Number(r.length) || 0, w = Number(r.width) || 0, h = Number(r.high) || 0;
@@ -386,7 +407,8 @@ function renderTrackOrder(code, detail, podResp, matter, order) {
     const rr = redRows[redRows.length - 1];
     h += "<div style='background:#fdecea;border:1px solid #ff6464;border-radius:4px;padding:10px 12px;margin-bottom:12px'>📦 <b>Đơn có phát lại</b> — dòng Giao lại hàng được tô đỏ trong Lịch sử POD bên dưới."
       + "<br>Thời gian: <b>" + esc(rr.scanTime || "") + "</b>"
-      + (rr.trackingContent ? " · " + esc(rr.trackingContent) : "")
+      + (rr.scanTypeName ? " · " + esc(rr.scanTypeName) : "")
+      + (renderTrackTemplate(rr) ? " · " + esc(renderTrackTemplate(rr)) : "")
       + (lastProblem && lastProblem.operatorName ? "<br>Nhân viên xử lý kiện vấn đề gần nhất: <b>" + esc(lastProblem.operatorName) + "</b>" : "")
       + "</div>";
   }
@@ -425,8 +447,8 @@ function renderTrackOrder(code, detail, podResp, matter, order) {
   else {
     podList.forEach(r => { r._red = isRedeliveryRow(r); });
     h += tableFromRows([
-      ["scanTime", "Thời gian quét"], ["uploadTime", "Thời gian tải lên"], ["scanType", "Loại quét"],
-      ["trackingContent", "Mô tả hành trình"], ["remark6", "Nguồn"], ["weight", "Khối lượng"],
+      ["scanTime", "Thời gian quét"], ["uploadTime", "Thời gian tải lên"], ["scanTypeName", "Loại quét"],
+      ["trackTemplate", "Mô tả hành trình", renderTrackTemplate], ["remark6", "Nguồn"], ["weight", "Khối lượng"],
       ["tijizhong", "KL thể tích", volWeight]
     ], podList);
   }
@@ -479,7 +501,11 @@ $("trackRunBtn").onclick = async () => {
   $("trackResults").innerHTML = "";
   for (let i = 0; i < codes.length; i++) {
     $("trackProgress").textContent = "Đang tra " + (i + 1) + "/" + codes.length + ": " + codes[i];
-    const detail = jmsData(await api("/api/call/track_detail", { waybillNo: codes[i] }));
+    let detail = jmsData(await api("/api/call/track_detail", { waybillNo: codes[i] }));
+    if (detail.err) {
+      await new Promise(r => setTimeout(r, 1000));
+      detail = jmsData(await api("/api/call/track_detail", { waybillNo: codes[i] }));
+    }
     const podResp = jmsData(await api("/api/call/track_pod", { keywordList: [codes[i]], trackingTypeEnum: "WAYBILL" }));
     const matter = jmsData(await api("/api/call/track_matter", { current: 1, size: 100, waybillId: codes[i] }));
     const order = jmsData(await api("/api/call/track_query", [{ id: codes[i] }]));
