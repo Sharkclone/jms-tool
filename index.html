@@ -7,75 +7,80 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#d9232e">
 <style>
-  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f8; color: #222; }
-  header { background: #d9232e; color: #fff; padding: 12px 20px; font-size: 18px; font-weight: 600; }
-  main { max-width: 980px; margin: 0 auto; padding: 16px; }
-  .card { background: #fff; border: 1px solid #dde3e8; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
-  .card h3 { margin: 0 0 10px; font-size: 15px; }
-  textarea, input[type=text], select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #c8d0d7; border-radius: 6px; font-size: 13px; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f2f2f2; color: #2d2d2d; }
+  header.topbar { background: #e60012; color: #fff; padding: 0 20px; height: 52px; display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: .2px; }
+  .brand span { font-weight: 400; }
+  .brand small { font-weight: 400; opacity: .8; font-size: 12px; margin-left: 6px; }
+  .pill { background: rgba(255,255,255,.18); padding: 5px 12px; border-radius: 12px; font-size: 12px; }
+  .layout { display: flex; align-items: flex-start; }
+  aside.sidebar { width: 232px; flex-shrink: 0; background: #2b2d42; min-height: calc(100vh - 52px); padding: 10px 0 20px; }
+  .sidebar .group { color: #8a8fa3; font-size: 11px; letter-spacing: 1px; padding: 14px 16px 6px; }
+  .menu button { display: block; width: 100%; text-align: left; background: transparent; color: #c9ccd6; border: 0; border-left: 3px solid transparent; border-radius: 0; padding: 12px 16px; font-size: 14px; cursor: pointer; }
+  .menu button:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .menu button.active { background: #e60012; color: #fff; border-left-color: #fff; }
+  main.content { flex: 1; min-width: 0; padding: 20px; }
+  .card { background: #fff; border: 1px solid #ebeef5; border-radius: 4px; padding: 16px 20px; margin-bottom: 16px; }
+  .card h3 { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #ebeef5; font-size: 16px; }
+  textarea, input[type=text], select { width: 100%; box-sizing: border-box; padding: 9px 12px; border: 1px solid #dcdee1; border-radius: 4px; font-size: 13px; }
+  textarea:focus, input[type=text]:focus, select:focus { border-color: #e60012; outline: none; }
   textarea { min-height: 110px; font-family: Consolas, monospace; }
-  button { background: #d9232e; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 13px; }
-  button.secondary { background: #5b6b76; }
+  button { background: #e60012; color: #fff; border: 0; border-radius: 4px; padding: 9px 18px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #c90010; }
+  button.secondary { background: #fff; color: #61666d; border: 1px solid #dcdee1; }
+  button.secondary:hover { background: #f2f2f2; }
   button:disabled { opacity: .5; cursor: default; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .row > * { margin: 4px 0; }
   .status { font-size: 13px; }
-  .ok { color: #157347; } .err { color: #b02a37; } .warn { color: #997404; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-  .tabs button { background: #e8edf0; color: #222; }
-  .tabs button.active { background: #d9232e; color: #fff; }
+  .ok { color: #52c41a; } .err { color: #ff6464; } .warn { color: #ff9c00; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { border: 1px solid #dde3e8; padding: 6px 8px; text-align: left; vertical-align: top; }
-  th { background: #f0f3f5; }
-  pre { white-space: pre-wrap; word-break: break-word; background: #f8f9fa; border: 1px solid #e3e7ea; border-radius: 6px; padding: 8px; font-size: 12px; max-height: 300px; overflow: auto; }
-  .small { font-size: 12px; color: #667; }
-  @media (max-width: 640px) {
-    main { padding: 10px; }
-    header { font-size: 16px; padding: 10px 14px; }
-    .tabs button { flex: 1 1 45%; }
-    .row button { flex: 1 1 auto; }
+  th, td { border: 1px solid #ebeef5; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f2f2f2; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:hover { background: #f2f2f2; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #f2f2f2; border: 1px solid #ebeef5; border-radius: 4px; padding: 10px; font-size: 12px; max-height: 300px; overflow: auto; }
+  .small { font-size: 12px; color: #61666d; }
+  @media (max-width: 768px) {
+    .layout { flex-direction: column; }
+    aside.sidebar { width: 100%; min-height: 0; padding: 0; display: flex; overflow-x: auto; }
+    .sidebar .group { display: none; }
+    .menu { display: flex; }
+    .menu button { flex: none; white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; }
+    .menu button.active { border-bottom-color: #fff; }
+    main.content { padding: 12px; width: 100%; box-sizing: border-box; }
+    header.topbar { height: auto; padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
     table { display: block; overflow-x: auto; font-size: 12px; }
     textarea { min-height: 90px; }
   }
 </style>
 </head>
 <body>
-<header>🧰 J&T JMS Tool — chạy local</header>
-<main>
+<header class="topbar">
+  <div class="brand">🚚 J&amp;T <span>JMS Tool</span><small>local</small></div>
+  <span class="pill" id="headSession">Đang kiểm tra phiên...</span>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="group">CHỨC NĂNG</div>
+    <div class="menu">
+      <button data-tab="returnTab" class="active">📦 Đăng ký chuyển hoàn hàng loạt</button>
+      <button data-tab="batchTab">📁 Đăng ký chuyển hoàn theo file</button>
+      <button data-tab="trackTab">🚚 Tra hành trình</button>
+      <button data-tab="signforTab">🔎 Tra ký nhận CSKH</button>
+    </div>
+    <div class="group">HỆ THỐNG</div>
+    <div class="menu">
+      <button data-tab="sessionTab">🔐 Phiên đăng nhập JMS</button>
+      <button data-tab="updateTab">🔄 Cập nhật tool</button>
+    </div>
+  </aside>
+  <main class="content">
 
   <div class="card" id="lanWarn" style="display:none;border-color:#e6a200;background:#fff8e1">
     <span class="warn">⚠️ Đang mở tool qua mạng LAN (không phải trên máy chạy bridge) — chỉ dùng trên WiFi tin cậy, tắt bridge khi không dùng nữa.</span>
   </div>
 
-  <div class="card">
-    <h3>🔐 Phiên đăng nhập JMS (token)</h3>
-    <div class="row">
-      <input type="text" id="tokenInput" placeholder="Dán YL_TOKEN của tab JMS đang đăng nhập vào đây (chỉ khi không dùng extension)...">
-    </div>
-    <div class="row">
-      <button id="saveTokenBtn">Lưu token</button>
-      <span class="status" id="sessionStatus">Đang kiểm tra...</span>
-    </div>
-    <p class="small">API của JMS xác thực bằng <b>token</b> (không phải cookie). Nếu đã cài extension đi kèm (thư mục <b>extension/</b>) thì chỉ cần đăng nhập JMS như bình thường — extension tự gửi token + cookie xuống tool. Cách thủ công dự phòng: mở tab JMS đã đăng nhập → F12 → thẻ <b>Application</b> → Local Storage → https://jms.jtexpress.vn → copy giá trị của khóa <b>YL_TOKEN</b>. Token chỉ lưu trên máy này (file session.json), hết hạn thì extension tự gửi bản mới.</p>
-    <p class="small" id="endpointStatus"></p>
-  </div>
-
-  <div class="card">
-    <h3>🔄 Cập nhật tool</h3>
-    <div class="row">
-      <button id="updateCheckBtn">Kiểm tra bản mới</button>
-      <button id="updateApplyBtn" class="secondary" disabled>Cập nhật lên bản mới</button>
-      <span class="status" id="updateStatus"></span>
-    </div>
-    <p class="small">Phiên bản hiện tại: <b id="updateCurrent">?</b>. Bản mới lấy từ repo GitHub của tool; trước khi ghi đè, tool sao lưu bản cũ vào thư mục <b>backups/</b> và không đụng tới session.json. Nếu server.py thay đổi thì khởi động lại bridge (chạy lại py server.py) để nhận bản mới; nếu extension thay đổi thì tải lại extension trong Chrome.</p>
-  </div>
-
-  <div class="tabs">
-    <button data-tab="returnTab" class="active">📦 Đăng ký chuyển hoàn hàng loạt</button>
-    <button data-tab="batchTab">📁 Đăng ký chuyển hoàn theo file</button>
-    <button data-tab="trackTab">🚚 Tra hành trình</button>
-    <button data-tab="signforTab">🔎 Tra ký nhận CSKH</button>
-  </div>
 
   <div class="card" id="returnTab">
     <h3>Đăng ký chuyển hoàn — mỗi mã một dòng</h3>
@@ -146,8 +151,32 @@
     <div id="signforResults"></div>
   </div>
 
+  <div class="card" id="sessionTab" style="display:none">
+    <h3>🔐 Phiên đăng nhập JMS (token)</h3>
+    <div class="row">
+      <input type="text" id="tokenInput" placeholder="Dán YL_TOKEN của tab JMS đang đăng nhập vào đây (chỉ khi không dùng extension)...">
+    </div>
+    <div class="row">
+      <button id="saveTokenBtn">Lưu token</button>
+      <span class="status" id="sessionStatus">Đang kiểm tra...</span>
+    </div>
+    <p class="small">API của JMS xác thực bằng <b>token</b> (không phải cookie). Nếu đã cài extension đi kèm (thư mục <b>extension/</b>) thì chỉ cần đăng nhập JMS như bình thường — extension tự gửi token + cookie xuống tool. Cách thủ công dự phòng: mở tab JMS đã đăng nhập → F12 → thẻ <b>Application</b> → Local Storage → https://jms.jtexpress.vn → copy giá trị của khóa <b>YL_TOKEN</b>. Token chỉ lưu trên máy này (file session.json), hết hạn thì extension tự gửi bản mới.</p>
+    <p class="small" id="endpointStatus"></p>
+  </div>
+
+  <div class="card" id="updateTab" style="display:none">
+    <h3>🔄 Cập nhật tool</h3>
+    <div class="row">
+      <button id="updateCheckBtn">Kiểm tra bản mới</button>
+      <button id="updateApplyBtn" class="secondary" disabled>Cập nhật lên bản mới</button>
+      <span class="status" id="updateStatus"></span>
+    </div>
+    <p class="small">Phiên bản hiện tại: <b id="updateCurrent">?</b>. Bản mới lấy từ repo GitHub của tool; trước khi ghi đè, tool sao lưu bản cũ vào thư mục <b>backups/</b> và không đụng tới session.json. Nếu server.py thay đổi thì khởi động lại bridge (chạy lại py server.py) để nhận bản mới; nếu extension thay đổi thì tải lại extension trong Chrome.</p>
+  </div>
+
   <p class="small">Tool chạy hoàn toàn trên máy này qua cầu nối Python (server.py). Dữ liệu gửi thẳng tới JMS bằng phiên đăng nhập của bạn.</p>
 </main>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -175,6 +204,7 @@ async function refreshStatus() {
   } else {
     $("sessionStatus").innerHTML = '<span class="warn">⚠️ Chưa có token — đăng nhập JMS (extension sẽ tự gửi) hoặc dán YL_TOKEN rồi bấm Lưu.</span>';
   }
+  $("headSession").textContent = s.token_set ? "✅ Đã có token JMS" : "⚠️ Chưa có token";
   const eps = await api("/api/endpoints");
   const parts = Object.entries(eps).map(([k, v]) =>
     (v.configured ? "✅ " : "⏳ ") + k);
@@ -188,11 +218,11 @@ $("saveTokenBtn").onclick = async () => {
   else alert("Lỗi: " + (r.detail || r.error));
 };
 
-document.querySelectorAll(".tabs button").forEach(btn => {
+document.querySelectorAll(".menu button").forEach(btn => {
   btn.onclick = () => {
-    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".menu button").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
-    ["returnTab", "batchTab", "trackTab", "signforTab"].forEach(id => $(id).style.display = "none");
+    ["returnTab", "batchTab", "trackTab", "signforTab", "sessionTab", "updateTab"].forEach(id => $(id).style.display = "none");
     $(btn.dataset.tab).style.display = "";
   };
 });
