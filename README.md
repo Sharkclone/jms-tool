@@ -17,6 +17,29 @@ không phải bằng cookie. Chi tiết kỹ thuật nằm ở `api-recon.md` m�
    Chưa cài extension thì dán YL_TOKEN vào ô **Phiên đăng nhập**, bấm **Lưu token**.
 4. Dùng các tab chức năng. Xong việc thì quay lại cửa sổ Python, nhấn `Ctrl+C` để tắt.
 
+## Chạy như phần mềm PC (app-mode)
+
+Bấm đúp file **`JMS-Tool.bat`** trong thư mục này: nó tự chạy bridge (cửa sổ
+thu nhỏ) rồi mở tool trong một cửa sổ Chrome riêng (không thanh địa chỉ, có
+icon trên taskbar — nhìn như phần mềm thật). Muốn ghim thì chuột phải vào
+cửa sổ app trên taskbar → **Pin to taskbar**. Tắt tool thì đóng cả cửa sổ
+app lẫn cửa sổ bridge.
+
+## Dùng trên điện thoại (mobile)
+
+1. Trên máy tính, bấm đúp **`JMS-Tool-Mobile.bat`** (hoặc chạy
+   `py server.py --host 0.0.0.0`) — bridge sẽ in ra địa chỉ LAN dạng
+   `http://<IP-máy-tính>:8765`.
+2. Điện thoại **cùng WiFi** với máy tính mở địa chỉ đó bằng Chrome là dùng
+   được hết các tab (giao diện đã chỉnh cho màn hình nhỏ).
+3. Muốn giống app thì trong Chrome trên điện thoại bấm menu → **Thêm vào
+   Màn hình chính** — lần sau bấm icon là mở thẳng tool.
+
+⚠️ **Lưu ý an toàn:** chế độ mobile mở bridge ra mạng LAN — ai cùng WiFi
+mở được địa chỉ đó là dùng được phiên JMS của bạn. Chỉ bật trên WiFi tin
+cậy (WiFi nhà riêng), xong việc thì tắt bridge ngay. Bản sau sẽ thêm mã
+PIN nếu bạn cần dùng trên mạng chung.
+
 ## Lấy phiên đăng nhập — cách tự động (khuyên dùng)
 
 Trong thư mục `extension/` có sẵn một extension Chrome mini đi kèm (v1.1):
@@ -64,4 +87,7 @@ Phiên đăng nhập chỉ lưu trong file `session.json` ngay trên máy bạn.
 - `endpoints.json` — danh sách API JMS thật.
 - `api-recon.md` — toàn bộ ghi chép giải mã API của web JMS.
 - `extension/` — extension Chrome tự lấy phiên đăng nhập (cookie + token).
+- `JMS-Tool.bat` — chạy tool kiểu app-mode trên PC Windows.
+- `JMS-Tool-Mobile.bat` — chạy bridge mở ra LAN để dùng trên điện thoại.
+- `manifest.webmanifest`, `tool-icon.svg` — khai báo để thêm tool vào màn hình chính điện thoại.
 - `session.json` — phiên đăng nhập (tự tạo khi lưu; file nhạy cảm).

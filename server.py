@@ -36,7 +36,8 @@ UPDATE_REPO = "Sharkclone/jms-tool"
 UPDATE_BRANCH = "main"
 UPDATE_FILES = ["server.py", "index.html", "endpoints.json", "README.md", "api-recon.md",
                 "version.json", "extension/manifest.json", "extension/background.js",
-                "extension/content.js"]
+                "extension/content.js", "JMS-Tool.bat", "JMS-Tool-Mobile.bat",
+                "manifest.webmanifest", "tool-icon.svg"]
 
 
 def load_session():
@@ -208,6 +209,27 @@ def apply_update():
                  "extension_reload_needed": any(r.startswith("extension/") for r in changed)}
 
 
+def _lan_ips():
+    """Dia chi IPv4 LAN cua may nay (bo qua loopback)."""
+    import socket
+    ips = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))  # chi hoi bang dinh tuyen, khong gui du lieu
+        ips.append(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127.") and ip not in ips:
+                ips.append(ip)
+    except Exception:
+        pass
+    return ips
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # giam log rac
         sys.stderr.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
@@ -259,6 +281,18 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {k: {"configured": bool((v.get("url") or "").strip()), "note": v.get("note", "")}
                                   for k, v in eps.items() if isinstance(v, dict)})
             return
+        if self.path in ("/manifest.webmanifest", "/tool-icon.svg"):
+            fname = self.path.lstrip("/")
+            path = os.path.join(BASE_DIR, fname)
+            ctype = "application/manifest+json" if fname.endswith(".webmanifest") else "image/svg+xml"
+            with open(path, "rb") as f:
+                raw = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         self._send_json(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -287,8 +321,19 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print("JMS Tool dang chay: http://localhost:%d  (Ctrl+C de dung)" % PORT)
+    import argparse
+    ap = argparse.ArgumentParser(description="JMS Tool bridge")
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="Dia chi lang nghe (mac dinh 127.0.0.1; 0.0.0.0 de mo qua LAN cho mobile)")
+    ap.add_argument("--port", type=int, default=PORT)
+    args = ap.parse_args()
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    print("JMS Tool dang chay: http://%s:%d  (Ctrl+C de dung)" % (args.host, args.port))
+    if args.host == "0.0.0.0":
+        print("Che do LAN (mobile) - mo tren dien thoai cung WiFi tai:")
+        for ip in _lan_ips():
+            print("  http://%s:%d" % (ip, args.port))
+        print("  CHI DUNG TREN WIFI TIN CAY - ai cung mang LAN mo duoc dia chi nay.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
