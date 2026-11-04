@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J&T JMS Tool — Local</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f8; color: #222; }
+  header { background: #d9232e; color: #fff; padding: 12px 20px; font-size: 18px; font-weight: 600; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border: 1px solid #dde3e8; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; }
+  textarea, input[type=text], select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #c8d0d7; border-radius: 6px; font-size: 13px; }
+  textarea { min-height: 110px; font-family: Consolas, monospace; }
+  button { background: #d9232e; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-size: 13px; }
+  button.secondary { background: #5b6b76; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > * { margin: 4px 0; }
+  .status { font-size: 13px; }
+  .ok { color: #157347; } .err { color: #b02a37; } .warn { color: #997404; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs button { background: #e8edf0; color: #222; }
+  .tabs button.active { background: #d9232e; color: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { border: 1px solid #dde3e8; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f0f3f5; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #f8f9fa; border: 1px solid #e3e7ea; border-radius: 6px; padding: 8px; font-size: 12px; max-height: 300px; overflow: auto; }
+  .small { font-size: 12px; color: #667; }
+</style>
+</head>
+<body>
+<header>🧰 J&T JMS Tool — chạy local</header>
+<main>
+
+  <div class="card">
+    <h3>🔐 Phiên đăng nhập JMS (token)</h3>
+    <div class="row">
+      <input type="text" id="tokenInput" placeholder="Dán YL_TOKEN của tab JMS đang đăng nhập vào đây (chỉ khi không dùng extension)...">
+    </div>
+    <div class="row">
+      <button id="saveTokenBtn">Lưu token</button>
+      <span class="status" id="sessionStatus">Đang kiểm tra...</span>
+    </div>
+    <p class="small">API của JMS xác thực bằng <b>token</b> (không phải cookie). Nếu đã cài extension đi kèm (thư mục <b>extension/</b>) thì chỉ cần đăng nhập JMS như bình thường — extension tự gửi token + cookie xuống tool. Cách thủ công dự phòng: mở tab JMS đã đăng nhập → F12 → thẻ <b>Application</b> → Local Storage → https://jms.jtexpress.vn → copy giá trị của khóa <b>YL_TOKEN</b>. Token chỉ lưu trên máy này (file session.json), hết hạn thì extension tự gửi bản mới.</p>
+    <p class="small" id="endpointStatus"></p>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="returnTab" class="active">📦 Đăng ký chuyển hoàn hàng loạt</button>
+    <button data-tab="batchTab">📁 Đăng ký chuyển hoàn theo file</button>
+    <button data-tab="trackTab">🚚 Tra hành trình</button>
+    <button data-tab="signforTab">🔎 Tra ký nhận CSKH</button>
+  </div>
+
+  <div class="card" id="returnTab">
+    <h3>Đăng ký chuyển hoàn — mỗi mã một dòng</h3>
+    <textarea id="returnCodes" placeholder="802851234567&#10;802859876543"></textarea>
+    <div class="row">
+      <label>Loại đơn:
+        <select id="returnType" style="width:auto">
+          <option value="lan1">Trả lại (Hoàn lần 1)</option>
+          <option value="lan2" selected>Chuyển hoàn lần 2 (Hoàn lần 2)</option>
+        </select>
+      </label>
+      <label>Nghỉ giữa các mã (ms):
+        <input type="text" id="returnDelay" value="1200" style="width:80px">
+      </label>
+      <button id="returnRunBtn">▶ Chạy</button>
+      <button id="returnStopBtn" class="secondary" disabled>Dừng</button>
+      <button id="returnExportBtn" class="secondary">Xuất CSV</button>
+      <span class="status" id="returnProgress"></span>
+    </div>
+    <table>
+      <thead><tr><th style="width:50px">STT</th><th>Mã vận đơn</th><th style="width:140px">Kết quả</th><th>Chi tiết từ JMS</th></tr></thead>
+      <tbody id="returnResults"></tbody>
+    </table>
+  </div>
+
+  <div class="card" id="batchTab" style="display:none">
+    <h3>Đăng ký chuyển hoàn theo file — đúng quy trình trang batch của JMS</h3>
+    <p class="small">Chọn file <b>.txt</b> hoặc <b>.csv</b> chứa mã vận đơn (mỗi mã một dòng, hoặc cách nhau bằng dấu phẩy/chấm phẩy). Tool đọc file → tra cứu theo lô tối đa 200 mã/lần (giới hạn của JMS, tool tự chia nhỏ) → hiện bảng cho a kiểm tra mã nào được phép → chọn loại chuyển hoàn → lưu một lần. File Excel (.xlsx) thì lưu thành CSV rồi chọn ở đây (bản sau sẽ hỗ trợ đọc thẳng .xlsx).</p>
+    <div class="row">
+      <input type="file" id="batchFile" accept=".txt,.csv" style="width:auto">
+      <span class="status" id="batchFileInfo"></span>
+    </div>
+    <div class="row">
+      <button id="batchQueryBtn">🔎 Tra cứu các mã trong file</button>
+      <label>Loại chuyển hoàn:
+        <select id="batchReturnType" style="width:auto">
+          <option value="">— đang tải danh sách từ JMS... —</option>
+        </select>
+      </label>
+      <button id="batchSaveBtn">💾 Lưu đăng ký</button>
+      <button id="batchExportBtn" class="secondary">Xuất CSV</button>
+      <span class="status" id="batchProgress"></span>
+    </div>
+    <table>
+      <thead><tr><th style="width:50px">STT</th><th>Mã vận đơn</th><th>Loại chuyển hoàn</th><th style="width:130px">Được phép?</th><th>Ghi chú</th><th>Người nhận</th></tr></thead>
+      <tbody id="batchResults"></tbody>
+    </table>
+    <p class="small" id="batchNote"></p>
+  </div>
+
+  <div class="card" id="trackTab" style="display:none">
+    <h3>Tra hành trình — mỗi mã một dòng</h3>
+    <textarea id="trackCodes" placeholder="802851234567"></textarea>
+    <div class="row">
+      <button id="trackRunBtn">▶ Tra cứu</button>
+      <span class="status" id="trackProgress"></span>
+    </div>
+    <div id="trackResults"></div>
+  </div>
+
+  <div class="card" id="signforTab" style="display:none">
+    <h3>Tra ký nhận CSKH — mỗi mã một dòng (tối đa 500)</h3>
+    <textarea id="signforCodes" placeholder="802851234567"></textarea>
+    <div class="row">
+      <button id="signforRunBtn">▶ Tra cứu</button>
+      <span class="status" id="signforProgress"></span>
+    </div>
+    <div id="signforResults"></div>
+  </div>
+
+  <p class="small">Tool chạy hoàn toàn trên máy này qua cầu nối Python (server.py). Dữ liệu gửi thẳng tới JMS bằng phiên đăng nhập của bạn.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return res.json();
+}
+
+async function refreshStatus() {
+  const s = await api("/api/session/status");
+  if (s.token_set) {
+    $("sessionStatus").innerHTML = '<span class="ok">✅ Đã có token JMS' +
+      (s.cookie_set ? " + cookie" : "") + ' (lưu lúc ' + s.saved_at + ')</span>';
+  } else {
+    $("sessionStatus").innerHTML = '<span class="warn">⚠️ Chưa có token — đăng nhập JMS (extension sẽ tự gửi) hoặc dán YL_TOKEN rồi bấm Lưu.</span>';
+  }
+  const eps = await api("/api/endpoints");
+  const parts = Object.entries(eps).map(([k, v]) =>
+    (v.configured ? "✅ " : "⏳ ") + k);
+  $("endpointStatus").textContent = "Trạng thái API JMS: " + parts.join(" · ");
+}
+$("saveTokenBtn").onclick = async () => {
+  const token = $("tokenInput").value.trim();
+  if (!token) { alert("Chưa dán token."); return; }
+  const r = await api("/api/session", { token });
+  if (r.ok) { $("tokenInput").value = ""; refreshStatus(); }
+  else alert("Lỗi: " + (r.detail || r.error));
+};
+
+document.querySelectorAll(".tabs button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    ["returnTab", "batchTab", "trackTab", "signforTab"].forEach(id => $(id).style.display = "none");
+    $(btn.dataset.tab).style.display = "";
+  };
+});
+
+function parseCodes(text) {
+  return text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---- Dang ky chuyen hoan hang loat ----
+// Quy trinh giong het thao tac tay tren trang JMS (da doi chieu ma nguon web JMS):
+//   1) GET findByWaybillNo?waybillNo=<ma>&applyTypeCode=<4|6> -> data la form don.
+//   2) POST add (lan 1) / registerSecondReback (lan 2) voi payload = data +
+//      rebackTypeValue/rebackTypeCode/rebackTransferReason/applyTypeCode/
+//      newPackageChargeWeight, bo truong reason. Thanh cong khi code === 1.
+let returnStop = false, returnRows = [];
+function parseJms(resp) {
+  // Cau noi tra {ok, upstream_status, data: "<chuoi JSON cua JMS>"} hoac {error, detail}
+  if (!resp || resp.error) return { err: resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối" };
+  try { return { jms: JSON.parse(resp.data) }; }
+  catch (e) { return { err: "JMS trả về không phải JSON: " + String(resp.data).slice(0, 200) }; }
+}
+function classifySaveMsg(msg) {
+  const t = (msg || "").toLowerCase();
+  if (t.includes("đã duyệt") || t.includes("đã ghi nhận") || t.includes("đã tồn tại") || t.includes("137043004"))
+    return "Đã đăng ký";
+  return "Lỗi";
+}
+$("returnRunBtn").onclick = async () => {
+  const codes = parseCodes($("returnCodes").value);
+  if (!codes.length) { alert("Chưa nhập mã vận đơn."); return; }
+  const type = $("returnType").value;
+  const applyTypeCode = type === "lan2" ? 6 : 4;
+  const saveEp = type === "lan2" ? "return_save_2" : "return_save_1";
+  const delay = parseInt($("returnDelay").value || "1200", 10);
+  returnStop = false; returnRows = [];
+  $("returnResults").innerHTML = "";
+  $("returnRunBtn").disabled = true; $("returnStopBtn").disabled = false;
+  for (let i = 0; i < codes.length; i++) {
+    if (returnStop) break;
+    const code = codes[i];
+    $("returnProgress").textContent = "Đang xử lý " + (i + 1) + "/" + codes.length + ": " + code;
+    let status = "Lỗi", detail = "";
+    try {
+      // Buoc 1: tim kiem (JMS dien san form)
+      const s = parseJms(await api("/api/call/return_search", { waybillNo: code, applyTypeCode }));
+      if (s.err) { status = "Lỗi cầu nối"; detail = s.err; }
+      else if (!s.jms || s.jms.code !== 1) { status = "Lỗi tìm kiếm"; detail = (s.jms && s.jms.msg) || "Không rõ"; }
+      else {
+        // Buoc 2: luu dang ky - dung payload giong nut "Luu va them moi"
+        const d = s.jms.data || {};
+        const payload = Object.assign({}, d, {
+          rebackTypeValue: d.returnType,
+          rebackTypeCode: d.rebackReasonCode,
+          rebackTransferReason: d.rebackTransferReason,
+          applyTypeCode: applyTypeCode,
+          newPackageChargeWeight: Number(d.chargeWeight) || 0
+        });
+        delete payload.reason;
+        const r = parseJms(await api("/api/call/" + saveEp, payload));
+        if (r.err) { status = "Lỗi cầu nối"; detail = r.err; }
+        else if (r.jms && r.jms.code === 1) { status = "Thành công"; detail = r.jms.msg || ""; }
+        else { status = classifySaveMsg(r.jms && r.jms.msg); detail = (r.jms && r.jms.msg) || "Không rõ"; }
+      }
+    } catch (e) { detail = String(e); }
+    returnRows.push({ code, status, detail });
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + (i + 1) + "</td><td>" + code + "</td><td>" + status + "</td><td></td>";
+    tr.lastChild.textContent = detail;
+    $("returnResults").appendChild(tr);
+    if (i < codes.length - 1 && !returnStop) await sleep(delay);
+  }
+  $("returnProgress").textContent = "Xong: " + returnRows.length + " mã.";
+  $("returnRunBtn").disabled = false; $("returnStopBtn").disabled = true;
+};
+$("returnStopBtn").onclick = () => { returnStop = true; };
+$("returnExportBtn").onclick = () => {
+  if (!returnRows.length) { alert("Chưa có kết quả."); return; }
+  const csv = "Ma van don,Ket qua,Chi tiet\n" + returnRows.map(r =>
+    [r.code, r.status, '"' + (r.detail || "").replace(/"/g, '""') + '"'].join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+  a.download = "ket-qua-chuyen-hoan.csv"; a.click();
+};
+
+// ---- Tra hanh trinh + tra ky nhan CSKH: hien ket qua tho tu JMS (JSON dep) ----
+function prettyResp(resp) {
+  if (!resp || resp.error) return "⚠️ " + (resp ? (resp.detail || resp.error) : "Không có phản hồi từ cầu nối");
+  try { return JSON.stringify(JSON.parse(resp.data), null, 2); }
+  catch (e) { return resp.data || "(rỗng)"; }
+}
+function addResultBlock(containerId, title, text) {
+  const div = document.createElement("div");
+  div.innerHTML = "<h4 style='margin:10px 0 4px'></h4>";
+  div.firstChild.textContent = title;
+  const pre = document.createElement("pre");
+  pre.textContent = text;
+  div.appendChild(pre);
+  $(containerId).appendChild(div);
+}
+$("trackRunBtn").onclick = async () => {
+  const codes = parseCodes($("trackCodes").value);
+  if (!codes.length) { alert("Chưa nhập mã vận đơn."); return; }
+  $("trackRunBtn").disabled = true;
+  $("trackResults").innerHTML = "";
+  for (let i = 0; i < codes.length; i++) {
+    $("trackProgress").textContent = "Đang tra " + (i + 1) + "/" + codes.length + ": " + codes[i];
+    // Thong tin don: payload la MANG [{id: ma}] nhu trang JMS gui
+    const r1 = await api("/api/call/track_query", [{ id: codes[i] }]);
+    addResultBlock("trackResults", codes[i] + " — thông tin đơn (opsOrderList)", prettyResp(r1));
+    // Kien van de cua don
+    const r2 = await api("/api/call/track_matter", { current: 1, size: 100, waybillId: codes[i] });
+    addResultBlock("trackResults", codes[i] + " — kiện vấn đề (abnormalPieceScanList)", prettyResp(r2));
+  }
+  $("trackProgress").textContent = "Xong.";
+  $("trackRunBtn").disabled = false;
+};
+$("signforRunBtn").onclick = async () => {
+  const codes = parseCodes($("signforCodes").value);
+  if (!codes.length) { alert("Chưa nhập mã vận đơn."); return; }
+  $("signforRunBtn").disabled = true;
+  $("signforResults").innerHTML = "";
+  $("signforProgress").textContent = "Đang tra " + codes.length + " mã...";
+  // Trang CSKH gui ca danh sach trong 1 request: {keywordList: [...], typeEnum: "WAYBILL"}
+  const r = await api("/api/call/signfor_query", { keywordList: codes, typeEnum: "WAYBILL" });
+  addResultBlock("signforResults", "Kết quả ký nhận cho " + codes.length + " mã", prettyResp(r));
+  $("signforProgress").textContent = "Xong.";
+  $("signforRunBtn").disabled = false;
+};
+
+// ---- Dang ky chuyen hoan theo file (trang batch MutilReturnBack2 cua JMS) ----
+// Quy trinh giong het trang batch: queryList {waybillNos} toi da 200 ma/lan ->
+// bang {waybillNo, returnType, enteringFlag (1=duoc, 2=khong), remark, receiverName} ->
+// afterFilterSave [{waybillNo, rebackTypeCode}]. Trang goc CHAN luu neu co ma
+// enteringFlag=2 (bao "loai ra roi thu lai"); tool lam giong, kem nut loai nhanh.
+let batchCodes = [], batchRows = [];
+async function loadBatchDict() {
+  const sel = $("batchReturnType");
+  try {
+    const r = await api("/api/call/batch_dict", { current: 1, size: 999 });
+    const p = parseJms(r);
+    if (p.err) throw new Error(p.err);
+    const d = p.jms.data || {};
+    const list = Array.isArray(d) ? d : (d.records || []);
+    if (!list.length) throw new Error("Danh sách trống");
+    sel.innerHTML = '<option value="">— chọn loại chuyển hoàn —</option>' +
+      list.map(it => '<option value="' + it.code + '">' + (it.returnType || it.code) + '</option>').join("");
+  } catch (e) {
+    sel.innerHTML = "";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.id = "batchReturnTypeText"; inp.placeholder = "Nhập mã loại chuyển hoàn (không tải được danh sách từ JMS)";
+    inp.style.width = "320px";
+    sel.replaceWith(inp);
+  }
+}
+function batchReturnTypeValue() {
+  const sel = document.getElementById("batchReturnType");
+  if (sel) return sel.value;
+  const inp = document.getElementById("batchReturnTypeText");
+  return inp ? inp.value.trim() : "";
+}
+$("batchFile").onchange = async () => {
+  const f = $("batchFile").files[0];
+  if (!f) return;
+  const text = await f.text();
+  batchCodes = parseCodes(text);
+  batchRows = [];
+  $("batchResults").innerHTML = "";
+  $("batchFileInfo").textContent = "Đã đọc " + batchCodes.length + " mã từ file " + f.name;
+  $("batchNote").textContent = "";
+};
+$("batchQueryBtn").onclick = async () => {
+  if (!batchCodes.length) { alert("Chưa chọn file hoặc file không có mã nào."); return; }
+  $("batchQueryBtn").disabled = true;
+  batchRows = [];
+  $("batchResults").innerHTML = "";
+  for (let s = 0; s < batchCodes.length; s += 200) {
+    const chunk = batchCodes.slice(s, s + 200);
+    $("batchProgress").textContent = "Đang tra " + (s + 1) + "–" + Math.min(s + 200, batchCodes.length) + "/" + batchCodes.length + "...";
+    const r = await api("/api/call/batch_query", { waybillNos: chunk });
+    const p = parseJms(r);
+    if (p.err) { $("batchNote").textContent = "⚠️ Lỗi cầu nối: " + p.err; break; }
+    if (!p.jms || p.jms.code !== 1) { $("batchNote").textContent = "⚠️ JMS báo lỗi: " + ((p.jms && p.jms.msg) || "Không rõ"); break; }
+    const rows = Array.isArray(p.jms.data) ? p.jms.data : (p.jms.data.records || []);
+    batchRows = batchRows.concat(rows);
+  }
+  batchRows.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    const ok = row.enteringFlag === 1 || row.enteringFlag === "1";
+    tr.innerHTML = "<td>" + (i + 1) + "</td><td>" + (row.waybillNo || "") + "</td><td>" + (row.returnType || "") + "</td><td>" + (ok ? "Được phép" : "KHÔNG được phép") + "</td><td></td><td>" + (row.receiverName || "") + "</td>";
+    tr.children[4].textContent = row.remark || "";
+    if (!ok) tr.style.background = "#fdecea";
+    $("batchResults").appendChild(tr);
+  });
+  const blocked = batchRows.filter(r => !(r.enteringFlag === 1 || r.enteringFlag === "1"));
+  $("batchProgress").textContent = "Xong: " + batchRows.length + " mã (được phép: " + (batchRows.length - blocked.length) + ", không được phép: " + blocked.length + ").";
+  if (blocked.length) $("batchNote").textContent = "⚠️ Có " + blocked.length + " mã KHÔNG được phép (tô đỏ) — trang JMS gốc sẽ chặn lưu khi còn mã này. Bấm Lưu thì tool sẽ hỏi có loại các mã đó ra không.";
+  $("batchQueryBtn").disabled = false;
+};
+$("batchSaveBtn").onclick = async () => {
+  if (!batchRows.length) { alert("Chưa tra cứu mã nào."); return; }
+  const typeCode = batchReturnTypeValue();
+  if (!typeCode) { alert("Chưa chọn loại chuyển hoàn."); return; }
+  let rows = batchRows;
+  const blocked = rows.filter(r => !(r.enteringFlag === 1 || r.enteringFlag === "1"));
+  if (blocked.length) {
+    if (!confirm("Có " + blocked.length + " mã KHÔNG được phép. Loại các mã đó ra và chỉ lưu " + (rows.length - blocked.length) + " mã được phép?")) return;
+    rows = rows.filter(r => r.enteringFlag === 1 || r.enteringFlag === "1");
+  }
+  if (!rows.length) { alert("Không còn mã nào được phép để lưu."); return; }
+  $("batchSaveBtn").disabled = true;
+  $("batchProgress").textContent = "Đang lưu " + rows.length + " mã...";
+  const payload = rows.map(r => ({ waybillNo: r.waybillNo, rebackTypeCode: typeCode }));
+  const r = await api("/api/call/batch_save", payload);
+  const p = parseJms(r);
+  if (p.err) $("batchNote").textContent = "⚠️ Lỗi cầu nối: " + p.err;
+  else if (p.jms && p.jms.code === 1) $("batchProgress").textContent = "✅ Lưu thành công " + rows.length + " mã. " + (p.jms.msg || "");
+  else $("batchNote").textContent = "⚠️ JMS báo lỗi: " + ((p.jms && p.jms.msg) || "Không rõ");
+  $("batchSaveBtn").disabled = false;
+};
+$("batchExportBtn").onclick = () => {
+  if (!batchRows.length) { alert("Chưa có kết quả."); return; }
+  const csv = "Ma van don,Loai chuyen hoan,Duoc phep,Ghi chu,Nguoi nhan\n" + batchRows.map(r =>
+    [r.waybillNo || "", r.returnType || "", (r.enteringFlag === 1 || r.enteringFlag === "1") ? "Co" : "Khong",
+     '"' + (r.remark || "").replace(/"/g, '""') + '"', r.receiverName || ""].join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
+  a.download = "ket-qua-chuyen-hoan-theo-file.csv"; a.click();
+};
+
+loadBatchDict();
+refreshStatus();
+</script>
+</body>
+</html>

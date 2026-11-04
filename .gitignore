@@ -1,0 +1,9 @@
+# JMS session — never commit
+session.json
+# Python
+__pycache__/
+*.pyc
+# Recon dumps (J&T's own JS) — not part of the tool
+recon-js/
+# Local preview images
+*.png
