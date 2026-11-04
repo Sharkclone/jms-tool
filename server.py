@@ -30,6 +30,14 @@ ENDPOINTS_FILE = os.path.join(BASE_DIR, "endpoints.json")
 PORT = 8765
 JMS_ORIGIN = "https://jms.jtexpress.vn"
 
+# Tu cap nhat: code moi luon lay tu repo GitHub cua tool (nhanh main).
+# Chi tai dung danh sach file nay - khong bao gio dong vao session.json.
+UPDATE_REPO = "Sharkclone/jms-tool"
+UPDATE_BRANCH = "main"
+UPDATE_FILES = ["server.py", "index.html", "endpoints.json", "README.md", "api-recon.md",
+                "version.json", "extension/manifest.json", "extension/background.js",
+                "extension/content.js"]
+
 
 def load_session():
     try:
@@ -116,6 +124,90 @@ def forward_to_jms(name, payload):
         return 200, {"ok": False, "upstream_status": 0, "data": "Loi ket noi JMS: %s" % e}
 
 
+def _github_raw_url(rel):
+    from urllib.parse import quote
+    return "https://raw.githubusercontent.com/%s/%s/%s" % (UPDATE_REPO, UPDATE_BRANCH, quote(rel))
+
+
+def _fetch_url(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "JMS-Tool-Updater"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read()
+
+
+def _local_version():
+    try:
+        with open(os.path.join(BASE_DIR, "version.json"), "r", encoding="utf-8") as f:
+            return json.load(f).get("version") or "?"
+    except Exception:
+        return "?"
+
+
+def _version_tuple(v):
+    try:
+        return tuple(int(p) for p in str(v).split("."))
+    except Exception:
+        return None
+
+
+def check_update():
+    """So sanh version local voi version moi nhat tren repo.
+    Chi bao co ban moi khi ban tren repo that su moi hon ban local."""
+    try:
+        remote = json.loads(_fetch_url(_github_raw_url("version.json")).decode("utf-8"))
+        latest = remote.get("version") or "?"
+    except Exception as e:
+        return 200, {"ok": False, "error": "fetch_failed",
+                     "detail": "Khong tai duoc version moi tu GitHub: %s" % e}
+    current = _local_version()
+    lt, ct = _version_tuple(latest), _version_tuple(current)
+    if lt is not None and ct is not None:
+        available = lt > ct
+    else:
+        available = latest != current
+    return 200, {"ok": True, "current": current, "latest": latest,
+                 "update_available": available}
+
+
+def apply_update():
+    """Tai ban moi -> sao luu ban cu -> ghi de. session.json khong bao gio bi dong vao."""
+    # 1. Tai toan bo file moi ve truoc; chi khi du thi moi cham vao file cu.
+    try:
+        new_contents = {}
+        for rel in UPDATE_FILES:
+            new_contents[rel] = _fetch_url(_github_raw_url(rel))
+        json.loads(new_contents["version.json"].decode("utf-8"))
+    except Exception as e:
+        return 200, {"ok": False, "error": "download_failed",
+                     "detail": "Tai ban moi that bai, ban cu van nguyen: %s" % e}
+    # 2. Sao luu ban cu vao backups/<thoi gian>/ (tru session.json).
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup_dir = os.path.join(BASE_DIR, "backups", stamp)
+    for rel in UPDATE_FILES:
+        src = os.path.join(BASE_DIR, rel)
+        if os.path.isfile(src):
+            dst = os.path.join(backup_dir, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(src, "rb") as f:
+                data = f.read()
+            with open(dst, "wb") as f:
+                f.write(data)
+    # 3. Ghi de + lap danh sach file thay doi de hien cho nguoi dung.
+    changed = []
+    for rel in UPDATE_FILES:
+        src = os.path.join(BASE_DIR, rel)
+        old = open(src, "rb").read() if os.path.isfile(src) else None
+        if old != new_contents[rel]:
+            changed.append(rel)
+        with open(src, "wb") as f:
+            f.write(new_contents[rel])
+    new_version = json.loads(new_contents["version.json"].decode("utf-8")).get("version")
+    return 200, {"ok": True, "current": _local_version(), "new_version": new_version,
+                 "changed": changed, "backup_dir": backup_dir,
+                 "restart_needed": "server.py" in changed,
+                 "extension_reload_needed": any(r.startswith("extension/") for r in changed)}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # giam log rac
         sys.stderr.write("[%s] %s\n" % (time.strftime("%H:%M:%S"), fmt % args))
@@ -158,6 +250,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"cookie_set": has_cookie, "token_set": has_token,
                                   "saved_at": s.get("saved_at") if (has_cookie or has_token) else None})
             return
+        if self.path == "/api/update/check":
+            code, obj = check_update()
+            self._send_json(code, obj)
+            return
         if self.path == "/api/endpoints":
             eps = load_endpoints()
             self._send_json(200, {k: {"configured": bool((v.get("url") or "").strip()), "note": v.get("note", "")}
@@ -176,6 +272,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             data = save_session(cookie=cookie or None, token=token or None, lang=lang or None)
             self._send_json(200, {"ok": True, "saved_at": data["saved_at"]})
+            return
+        if self.path == "/api/update/apply":
+            code, obj = apply_update()
+            self._send_json(code, obj)
             return
         if self.path.startswith("/api/call/"):
             name = self.path[len("/api/call/"):].strip()

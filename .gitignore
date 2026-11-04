@@ -7,3 +7,5 @@ __pycache__/
 recon-js/
 # Local preview images
 *.png
+# Update backups (old versions kept on the user's machine only)
+backups/

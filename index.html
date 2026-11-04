@@ -46,6 +46,16 @@
     <p class="small" id="endpointStatus"></p>
   </div>
 
+  <div class="card">
+    <h3>🔄 Cập nhật tool</h3>
+    <div class="row">
+      <button id="updateCheckBtn">Kiểm tra bản mới</button>
+      <button id="updateApplyBtn" class="secondary" disabled>Cập nhật lên bản mới</button>
+      <span class="status" id="updateStatus"></span>
+    </div>
+    <p class="small">Phiên bản hiện tại: <b id="updateCurrent">?</b>. Bản mới lấy từ repo GitHub của tool; trước khi ghi đè, tool sao lưu bản cũ vào thư mục <b>backups/</b> và không đụng tới session.json. Nếu server.py thay đổi thì khởi động lại bridge (chạy lại py server.py) để nhận bản mới; nếu extension thay đổi thì tải lại extension trong Chrome.</p>
+  </div>
+
   <div class="tabs">
     <button data-tab="returnTab" class="active">📦 Đăng ký chuyển hoàn hàng loạt</button>
     <button data-tab="batchTab">📁 Đăng ký chuyển hoàn theo file</button>
@@ -391,6 +401,33 @@ $("batchExportBtn").onclick = () => {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
   a.download = "ket-qua-chuyen-hoan-theo-file.csv"; a.click();
+};
+
+// ---- Tu cap nhat tu repo GitHub ----
+$("updateCheckBtn").onclick = async () => {
+  $("updateStatus").textContent = "Đang kiểm tra...";
+  $("updateApplyBtn").disabled = true;
+  const r = await api("/api/update/check");
+  if (!r.ok) { $("updateStatus").innerHTML = '<span class="err">⚠️ ' + (r.detail || r.error) + '</span>'; return; }
+  $("updateCurrent").textContent = r.current;
+  if (r.update_available) {
+    $("updateStatus").innerHTML = 'Có bản mới: <b>' + r.latest + '</b> (đang dùng ' + r.current + ') — bấm Cập nhật để tải về.';
+    $("updateApplyBtn").disabled = false;
+  } else {
+    $("updateStatus").innerHTML = '<span class="ok">✅ Đang dùng bản mới nhất (' + r.current + ').</span>';
+  }
+};
+$("updateApplyBtn").onclick = async () => {
+  if (!confirm("Cập nhật tool lên bản mới nhất? Bản cũ sẽ được sao lưu vào thư mục backups/ trước khi ghi đè.")) return;
+  $("updateApplyBtn").disabled = true;
+  $("updateStatus").textContent = "Đang tải bản mới...";
+  const r = await api("/api/update/apply");
+  if (!r.ok) { $("updateStatus").innerHTML = '<span class="err">⚠️ ' + (r.detail || r.error) + '</span>'; $("updateApplyBtn").disabled = false; return; }
+  let msg = '✅ Đã cập nhật lên bản ' + r.new_version + '. File thay đổi: ' + (r.changed.length ? r.changed.join(", ") : "không có") + '. Bản cũ đã sao lưu.';
+  if (r.restart_needed) msg += ' ⚠️ server.py đã đổi — khởi động lại bridge (chạy lại py server.py) để nhận bản mới.';
+  if (r.extension_reload_needed) msg += ' ⚠️ Extension đã đổi — tải lại extension trong Chrome.';
+  $("updateStatus").innerHTML = msg;
+  $("updateCurrent").textContent = r.new_version;
 };
 
 loadBatchDict();
